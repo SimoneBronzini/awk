@@ -1,7 +1,7 @@
 awk
 =====
 
-A library to provide advanced awk-like functionalities to file manipulation in Python.
+A library to provide advanced awk-like functionalities for file manipulation in Python.
 
 Motivation
 -------------
