@@ -30,13 +30,9 @@ All the functions that parse files return generators. That is made to avoid load
 Usage
 --------
 
-### 1) Install
+### Install
 
     sudo python setup.py install
-
-### 2) Uninstall
-
-    sudo python setup.py uninstall
 
 ### Examples
 
