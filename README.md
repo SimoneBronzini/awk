@@ -51,10 +51,12 @@ Imagine to have the following file `testinput`:
 
 the following code will return every line as a tuple of fields:
 
+    ```python
 	from awk import Reader
 	with Reader('testinput', fs=' ') as reader:
         for record in reader:
             print(record)
+    ```
 
 output:
 
@@ -66,10 +68,12 @@ output:
     
 The following code will parse the same file, parsing the header as keys for the various fields, and return a dictionary:
 
+    ```python
 	from awk import Reader
 	with Reader('testinput', fs=' ') as reader:
         for record in reader:
             print(record)
+    ```
 
 output:
 
@@ -90,6 +94,7 @@ Notice that the above output returns an unordered dictionary, indexed by the key
 This is the class which most reflects the awk command philosophy, performing computation on a file organised in fields and recoprds.
 For instance, we can use the following code to square every value in our file:
 
+    ```python
     from awk import Parser
     parser = Parser('testinput',
                     fs=' ',
@@ -98,6 +103,7 @@ For instance, we can use the following code to square every value in our file:
                     field_func=lambda key, field: int(field)**2)
     for record in parser.parse():
         print(record)
+    ```
 
 output:
 
@@ -108,6 +114,7 @@ output:
 
 We can make every record the sum of its fields:
 
+    ```python
     from awk import Parser
     parser = Parser('testinput',
                     fs=' ',
@@ -117,6 +124,7 @@ We can make every record the sum of its fields:
                     record_func=lambda nr, nf, record: sum(record.values()))
     for record in parser.parse():
         print(record)
+    ```
 
 output:
 
@@ -127,6 +135,7 @@ output:
 
 and filter out all fields whose key is a vowel and all records whose sum is greater than 100:
 
+    ```python
     from awk import Parser
     parser = Parser('testinput',
                     fs=' ',
@@ -138,6 +147,7 @@ and filter out all fields whose key is a vowel and all records whose sum is grea
                     record_post_filter=lambda nr, nf, record: record > 100)
     for record in parser.parse():
         print(record)
+    ```
 
 output
 
@@ -148,8 +158,10 @@ output
 This function returns a column of the file as a generator of fields either by the header's key or by the column number.
 This code prints column `G`:
 
+    ```python
     from awk import column
     print(tuple(column('testinput', 'G', fs=' ', header=True)))
+    ```
 
 output:
 
@@ -157,8 +169,10 @@ output:
 
 This code prints the values at column `G` squared
 
+    ```python
     from awk import column
     print(tuple(column('testinput', 'G', fs=' ', header=True, item_func=lambda x: int(x)**2)))
+    ```
 
 output:
 
@@ -166,8 +180,10 @@ output:
 
 This code prints column `2` (remember that in awk field numbers start from 1) without parsing the header:
 
+    ```python
     from awk import column
     print(tuple(column('testinput', 2, fs=' ')))
+    ```
 
 output:
 
