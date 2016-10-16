@@ -9,7 +9,7 @@ Motivation
 Help manipulating files organised in recrods and fields, providing helpers such as `column` to extract a single column from the file and header parsing for files containing a header on their first line.
 
 
-Organisation
+Structure
 ------------
 
 `awk` provides two main classes: `Reader` and `Parser`, plus a function `column`.
@@ -150,7 +150,7 @@ output
     162
     170
 
-#### `column`
+#### column
 This function returns a column of the file as a generator of fields either by the header's key or by the column number.
 This code prints column `G`:
 
@@ -186,7 +186,7 @@ output:
     ('B', '8', '0', '3', '2')
 
 
-Missing features
+TODO list
 --------------
 
 * Allow to provide a regex as field separator
