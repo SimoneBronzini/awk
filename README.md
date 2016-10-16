@@ -14,33 +14,33 @@ Organisation
 
 `awk` provides two main classes: `Reader` and `Parser`, plus a function `column`.
 
-## Reader class
+### Reader class
 Provides facilities to read the file one record at a time, possibly using the first line as header. If the header is provided then every record is returned as a dictionary having as keys the header fields, otherwise every record is a tuple of fields
 
-## Parser class
+### Parser class
 Provides facilities to manipulate and filter out records and fields before reading them.
 
-## `column` function
+### `column` function
 Extracts a column from the file as a list. The column can be specified as a key corresponding to one of the keys in the header or as a number in case there is no header (field numbers start from 1 as in the awk command standard)
 
-## A note on efficiency
+### A note on efficiency
 All the functions that parse files return generators. That is made to avoid loading huge files in ram before parsing them. Every piece of code in this library was made with attention to the efficiency of parsing large files.
 
 
 Usage
 --------
 
-## 1) Install
+### 1) Install
 
     sudo python setup.py install
 
-## 2) Uninstall
+### 2) Uninstall
 
     sudo python setup.py uninstall
 
-## Examples
+### Examples
 
-### Reader
+#### Reader
 Imagine to have the following file `testinput`:
 
 	A B C D E F G
@@ -86,12 +86,16 @@ Notice that the above output returns an unordered dictionary, indexed by the key
     OrderedDict([('A', '0'), ('B', '2'), ('C', '1'), ('D', '0'), ('E', '8'), ('F', '3'), ('G', '7')])
 
 
-### Parser
+#### Parser
 This is the class which most reflects the awk command philosophy, performing computation on a file organised in fields and recoprds.
 For instance, we can use the following code to square every value in our file:
 
     from awk import Parser
-    parser = Parser('testinput', fs=' ', header=True, ordered=True, field_func=lambda key, field: int(field)**2)
+    parser = Parser('testinput',
+                    fs=' ',
+                    header=True,
+                    ordered=True,
+                    field_func=lambda key, field: int(field)**2)
     for record in parser.parse():
         print(record)
 
@@ -140,7 +144,7 @@ output
     162
     170
 
-### `column`
+#### `column`
 This function returns a column of the file as a generator of fields either by the header's key or by the column number.
 This code prints column `G`:
 
@@ -168,3 +172,13 @@ This code prints column `2` (remember that in awk field numbers start from 1) wi
 output:
 
     ('B', '8', '0', '3', '2')
+
+
+Missing features
+--------------
+
+* Allow to provide a regex as field separator
+
+* Create a Writer class to store structured output on other files
+
+* Allow to provide a custom record separator
