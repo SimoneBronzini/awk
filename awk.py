@@ -1,4 +1,5 @@
 from itertools import zip_longest
+from collections import OrderedDict
 
 
 class FileNotOpenException(Exception):
@@ -30,7 +31,7 @@ def _DEFAULT_RECORD_FILTER(NR, NF, record):
 
 class Reader(object):
 
-    def __init__(self, filename, fs=DEFAULT_FIELD_SEP, header=False):
+    def __init__(self, filename, fs=DEFAULT_FIELD_SEP, header=False, ordered=False):
         """Initialises a Reader
 
         Arguments:
@@ -41,10 +42,12 @@ class Reader(object):
         header -- if set to True, the reader interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
+        ordered -- if header i True, then the records will be output as `OrderedDict`s instead of normal dictionaries
         """
         self.filename = filename
         self.header = header
         self.fs = fs
+        self.ordered = ordered
         self._openfile = None
         self._keys = None
 
@@ -77,7 +80,12 @@ class Reader(object):
                 zip_func = zip
             else:
                 zip_func = zip_longest
-            fields = {k: v for k, v in zip_func(self._keys, fields)}
+
+            if not self.ordered:
+                fields = {k: v for k, v in zip_func(self._keys, fields)}
+            else:
+                fields = OrderedDict((k, v) for k, v in zip_func(self._keys, fields))
+
         return fields
 
 
@@ -87,6 +95,7 @@ class Parser(object):
                  filename,
                  fs=DEFAULT_FIELD_SEP,
                  header=False,
+                 ordered=False,
                  field_func=_DEFAULT_FIELD_FUNC,
                  record_func=_DEFAULT_RECORD_FUNC,
                  field_pre_filter=_DEFAULT_FIELD_FILTER,
@@ -103,6 +112,7 @@ class Parser(object):
         header -- if set to True, the parser interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
+        ordered -- if header i True, then the records will be output as `OrderedDict`s instead of normal dictionaries
         field_func -- a function f(field_key, field) which is applied to every field, field_key is
                       the number of the field if there is no header, the corresponding header key otherwise.
                       default: a function that returns the field
@@ -126,6 +136,7 @@ class Parser(object):
         self.filename = filename
         self.header = header
         self.fs = fs
+        self.ordered = ordered
         self.field_func = field_func
         self.record_func = record_func
         self.field_pre_filter = field_pre_filter
@@ -150,6 +161,9 @@ class Parser(object):
                     result.append((key, new_field))
 
         if self.header:
+            if self.ordered:
+                # return an OrderedDict
+                return OrderedDict(result)
             # return a dict
             return dict(result)
         # return a list
@@ -163,14 +177,15 @@ class Parser(object):
         of record_func and field_func respectively.
         Only records respecting the pre and post filters are present, same applies for the fields in each record
         """
-        with Reader(self.filename, self.fs, self.header) as reader:
+        with Reader(self.filename, self.fs, self.header, self.ordered) as reader:
             for nr, record in enumerate(reader, 1):
                 nf = len(record)
                 if not self.record_pre_filter(nr, nf, record):
                     continue
                 result = self._get_field(record)
-                if self.record_post_filter(nr, nf, result):
-                    yield self.record_func(nr, nf, result)
+                new_record = self.record_func(nr, nf, result)
+                if self.record_post_filter(nr, nf, new_record):
+                    yield new_record
 
 
 def column(filename, key, fs=DEFAULT_FIELD_SEP, header=False, item_func=lambda x: x):
