@@ -66,7 +66,7 @@ The following code will parse the same file, parsing the header as keys for the 
 
 ```python
 from awk import Reader
-with Reader('testinput', fs=' ') as reader:
+with Reader('testinput', fs=' ', header=True) as reader:
     for record in reader:
         print(record)
 ```
