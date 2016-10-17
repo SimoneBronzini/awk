@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import re
 from itertools import zip_longest
 from collections import OrderedDict
 
@@ -33,8 +34,7 @@ class FileNotOpenException(Exception):
 class MissingHeaderException(Exception):
     pass
 
-DEFAULT_FIELD_SEP = '\t'
-DEFAULT_RECORD_SEP = '\n'
+DEFAULT_FIELD_SEP = r'\s+'
 
 
 def _DEFAULT_FIELD_FUNC(field_key, field):
@@ -62,7 +62,7 @@ class Reader(object):
         filename -- the name of the file to parse
 
         Keyword arguments:
-        fs -- character that separates the fields
+        fs -- regex that separates the fields
         header -- if set to True, the reader interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
@@ -84,7 +84,7 @@ class Reader(object):
         self._openfile = open(self.filename)
         if self.header:
             first_line = next(self._openfile).rstrip()
-            self._keys = tuple(first_line.split(self.fs))
+            self._keys = tuple(re.split(self.fs, first_line))
         return self
 
     def __exit__(self, *args):
@@ -98,7 +98,7 @@ class Reader(object):
         if self._openfile is None:
             raise FileNotOpenException
         line = next(self._openfile).rstrip()
-        fields = tuple(line.split(self.fs))
+        fields = tuple(re.split(self.fs, line))
         if self.header:
             if len(fields) > len(self._keys):
                 zip_func = zip
@@ -132,7 +132,7 @@ class Parser(object):
         filename -- the name of the file to parse
 
         Keyword arguments:
-        fs -- character that separates the fields
+        fs -- a regex that separates the fields
         header -- if set to True, the parser interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines

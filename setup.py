@@ -15,6 +15,6 @@ setup(name='awk',
           'Programming Language :: Python :: 3.3',
           'Programming Language :: Python :: 3.4',
           'Programming Language :: Python :: 3.5',
-          'Topic :: File manipulation',
+          'Topic :: Text Processing :: General',
           'Topic :: Software Development :: Libraries :: Python Modules',
       ],)

@@ -14,10 +14,10 @@ Structure
 
 `awk` provides two main classes: `Reader` and `Parser`, plus a function `column`.
 
-### Reader class
+### `Reader` class
 Provides facilities to read the file one record at a time, possibly using the first line as header. If the header is provided then every record is returned as a dictionary having as keys the header fields, otherwise every record is a tuple of fields
 
-### Parser class
+### `Parser` class
 Provides facilities to manipulate and filter out records and fields before reading them.
 
 ### `column` function
@@ -49,7 +49,7 @@ the following code will return every line as a tuple of fields:
 
 ```python
 from awk import Reader
-with Reader('testinput', fs=' ') as reader:
+with Reader('testinput') as reader:
     for record in reader:
         print(record)
 ```
@@ -66,7 +66,7 @@ The following code will parse the same file, parsing the header as keys for the 
 
 ```python
 from awk import Reader
-with Reader('testinput', fs=' ', header=True) as reader:
+with Reader('testinput', header=True) as reader:
     for record in reader:
         print(record)
 ```
@@ -93,7 +93,6 @@ For instance, we can use the following code to square every value in our file:
 ```python
 from awk import Parser
 parser = Parser('testinput',
-                fs=' ',
                 header=True,
                 ordered=True,
                 field_func=lambda key, field: int(field)**2)
@@ -113,7 +112,6 @@ We can make every record the sum of its fields:
 ```python
 from awk import Parser
 parser = Parser('testinput',
-                fs=' ',
                 header=True,
                 ordered=True,
                 field_func=lambda key, field: int(field)**2,
@@ -134,7 +132,6 @@ and filter out all fields whose key is a vowel and all records whose sum is grea
 ```python
 from awk import Parser
 parser = Parser('testinput',
-                fs=' ',
                 header=True,
                 ordered=True,
                 field_func=lambda key, field: int(field)**2,
@@ -156,7 +153,7 @@ This code prints column `G`:
 
 ```python
 from awk import column
-print(tuple(column('testinput', 'G', fs=' ', header=True)))
+print(tuple(column('testinput', 'G', header=True)))
 ```
 
 output:
@@ -167,7 +164,7 @@ This code prints the values at column `G` squared
 
 ```python
 from awk import column
-print(tuple(column('testinput', 'G', fs=' ', header=True, item_func=lambda x: int(x)**2)))
+print(tuple(column('testinput', 'G', header=True, item_func=lambda x: int(x)**2)))
 ```
 
 output:
@@ -178,7 +175,7 @@ This code prints column `2` (remember that in awk field numbers start from 1) wi
 
 ```python
 from awk import column
-print(tuple(column('testinput', 2, fs=' ')))
+print(tuple(column('testinput', 2)))
 ```
 
 output:
@@ -189,7 +186,7 @@ output:
 TODO list
 --------------
 
-* Allow to provide a regex as field separator
+* Allow to provide unary functions (e.g. int, float, etc.) as record_func and field_func which are given as input the field/record without key/nr/nf parameters
 
 * Create a Writer class to store structured output on other files
 
