@@ -6,7 +6,7 @@ A library to provide advanced awk-like functionalities for file manipulation in 
 Motivation
 -------------
 
-Help manipulating files organised in recrods and fields, providing helpers such as `column` to extract a single column from the file and header parsing for files containing a header on their first line.
+Help manipulating files organised in recrods and fields, providing helpers such as `Column` to extract to access the file by columns and header parsing for files containing a header on their first line.
 
 
 Structure
@@ -20,8 +20,8 @@ Provides facilities to read the file one record at a time, possibly using the fi
 ### `Parser` class
 Provides facilities to manipulate and filter out records and fields before reading them.
 
-### `column` function
-Extracts a column from the file as a list. The column can be specified as a key corresponding to one of the keys in the header or as a number in case there is no header (field numbers start from 1 as in the awk command standard)
+### `Column` class
+Provides a column-based access to the file. The columns can be specified as a key corresponding to one of the keys in the header or as a number in case there is no header. If no header is specified, this class can be used to extract slices of columns from the file.
 
 ### A note on efficiency
 All the functions that parse files return generators. That is made to avoid loading huge files in ram before parsing them. Every piece of code in this library was made with attention to the efficiency of parsing large files.
@@ -31,6 +31,12 @@ Usage
 --------
 
 ### Install
+
+Using pip:
+
+    sudo pip install awk
+
+or cloning this repo:
 
     sudo python setup.py install
 
@@ -147,40 +153,106 @@ output
     162
     170
 
-#### column
-This function returns a column of the file as a generator of fields either by the header's key or by the column number.
-This code prints column `G`:
+#### Column
+This class provides column-based access to the file. Some examples:
+
+Extracting a single column:
 
 ```python
-from awk import column
-print(tuple(column('testinput', 'G', header=True)))
+from awk import Column
+columns = Column('testinput')
+print(list(columns[3]))
 ```
 
 output:
 
-    ('7', '0', '8', '7')
+    ('D', '0', '0', '6', '0')
 
-This code prints the values at column `G` squared
+
+Extracting the last column wit a two-lines limit:
 
 ```python
-from awk import column
-print(tuple(column('testinput', 'G', header=True, item_func=lambda x: int(x)**2)))
+from awk import Column
+columns = Column('testinput', max_lines=2)
+print(list(columns[-1]))
 ```
 
 output:
 
-    (49, 0, 64, 49)
+    ('G', '7')
 
-This code prints column `2` (remember that in awk field numbers start from 1) without parsing the header:
+
+Extracting columns 3 to 6:
 
 ```python
-from awk import column
-print(tuple(column('testinput', 2)))
+from awk import Column
+columns = Column('testinput')
+print(list(columns[3:6]))
 ```
 
 output:
 
-    ('B', '8', '0', '3', '2')
+    (('D', '0', '0', '6', '0'), ('E', '5', '0', '6', '8'), ('F', '7', '7', '6', '3'))
+
+
+Extracting every second column from 2 to 7:
+
+```python
+from awk import Column
+columns = Column('testinput')
+print(list(columns[2:7:2]))
+```
+
+output:
+
+    (('C', '0', '7', '5', '1'), ('E', '5', '0', '6', '8'), ('G', '7', '0', '8', '7'))
+
+
+Extracting the columns in reverse order with a limit of 3 lines:
+
+```python
+from awk import Column
+columns = Column('testinput', max_lines=3)
+print(list(columns[::-1]))
+```
+
+output:
+
+    (('G', '7', '0'), ('F', '7', '7'), ('E', '5', '0'), ('D', '0', '0'), ('C', '0', '7'), ('B', '8', '0'), ('A', '2', '3'))
+
+Extracting columns A, C and E:
+
+```python
+from awk import Column
+columns = Column('testinput', header=True)
+for line in columns.get('A', 'C', 'E'):
+    print(line)
+```
+
+output:
+
+    ('2', '0', '5')
+    ('3', '7', '0')
+    ('2', '5', '6')
+    ('0', '1', '8')
+
+Extracting columns 1, 3 and 5
+
+
+```python
+from awk import Column
+columns = Column('testinput')
+for line in columns.get(1, 3, 5):
+    print(line)
+```
+
+output (remember that except when slicing, field and column indexes start from 1 as per the awk standard):
+
+    ('A', 'C', 'E')
+    ('2', '0', '5')
+    ('3', '7', '0')
+    ('2', '5', '6')
+    ('0', '1', '8')
 
 
 TODO list

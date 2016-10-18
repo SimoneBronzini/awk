@@ -27,12 +27,21 @@ from itertools import zip_longest
 from collections import OrderedDict
 
 
+class SliceWithHeaderException(Exception):
+    pass
+
+
 class FileNotOpenException(Exception):
     pass
 
 
 class MissingHeaderException(Exception):
     pass
+
+
+class UnboundedColumnException(Exception):
+    pass
+
 
 DEFAULT_FIELD_SEP = r'\s+'
 
@@ -55,7 +64,7 @@ def _DEFAULT_RECORD_FILTER(NR, NF, record):
 
 class Reader(object):
 
-    def __init__(self, filename, fs=DEFAULT_FIELD_SEP, header=False, ordered=False):
+    def __init__(self, filename, fs=DEFAULT_FIELD_SEP, header=False, ordered=False, max_lines=None):
         """Initialises a Reader
 
         Arguments:
@@ -67,11 +76,14 @@ class Reader(object):
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
         ordered -- if header i True, then the records will be output as `OrderedDict`s instead of normal dictionaries
+        max_lines -- the maximum number of lines to read
         """
         self.filename = filename
         self.header = header
         self.fs = fs
         self.ordered = ordered
+        self.max_lines = max_lines
+        self._compiled_fs = re.compile(fs)
         self._openfile = None
         self._keys = None
 
@@ -82,13 +94,15 @@ class Reader(object):
 
     def __enter__(self):
         self._openfile = open(self.filename)
+        self.lines = 0
         if self.header:
             first_line = next(self._openfile).rstrip()
-            self._keys = tuple(re.split(self.fs, first_line))
+            self._keys = tuple(self._compiled_fs.split(first_line))
         return self
 
     def __exit__(self, *args):
         self._openfile.close()
+        self.lines = 0
         self._openfile = None
 
     def __iter__(self):
@@ -97,8 +111,13 @@ class Reader(object):
     def __next__(self):
         if self._openfile is None:
             raise FileNotOpenException
+
+        if self.max_lines is not None and self.lines >= self.max_lines:
+            raise StopIteration
+
         line = next(self._openfile).rstrip()
-        fields = tuple(re.split(self.fs, line))
+        fields = tuple(self._compiled_fs.split(line))
+
         if self.header:
             if len(fields) > len(self._keys):
                 zip_func = zip
@@ -110,6 +129,8 @@ class Reader(object):
             else:
                 fields = OrderedDict((k, v) for k, v in zip_func(self._keys, fields))
 
+        self.lines += 1
+
         return fields
 
 
@@ -120,6 +141,7 @@ class Parser(object):
                  fs=DEFAULT_FIELD_SEP,
                  header=False,
                  ordered=False,
+                 max_lines=None,
                  field_func=_DEFAULT_FIELD_FUNC,
                  record_func=_DEFAULT_RECORD_FUNC,
                  field_pre_filter=_DEFAULT_FIELD_FILTER,
@@ -136,7 +158,8 @@ class Parser(object):
         header -- if set to True, the parser interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
-        ordered -- if header i True, then the records will be output as `OrderedDict`s instead of normal dictionaries
+        ordered -- if header is True, then the records will be output as `OrderedDict`s instead of normal dictionaries
+        max_lines -- the maximum number of lines to parse
         field_func -- a function f(field_key, field) which is applied to every field, field_key is
                       the number of the field if there is no header, the corresponding header key otherwise.
                       default: a function that returns the field
@@ -161,6 +184,7 @@ class Parser(object):
         self.header = header
         self.fs = fs
         self.ordered = ordered
+        self.max_lines = max_lines
         self.field_func = field_func
         self.record_func = record_func
         self.field_pre_filter = field_pre_filter
@@ -168,7 +192,7 @@ class Parser(object):
         self.field_post_filter = field_post_filter
         self.record_post_filter = record_post_filter
 
-    def _get_field(self, record):
+    def _get_fields(self, record):
 
         if self.header:
             # expect a dict
@@ -201,31 +225,100 @@ class Parser(object):
         of record_func and field_func respectively.
         Only records respecting the pre and post filters are present, same applies for the fields in each record
         """
-        with Reader(self.filename, self.fs, self.header, self.ordered) as reader:
+        with Reader(self.filename, self.fs, self.header, self.ordered, self.max_lines) as reader:
             for nr, record in enumerate(reader, 1):
                 nf = len(record)
                 if not self.record_pre_filter(nr, nf, record):
                     continue
-                result = self._get_field(record)
+                result = self._get_fields(record)
                 new_record = self.record_func(nr, nf, result)
                 if self.record_post_filter(nr, nf, new_record):
                     yield new_record
 
 
-def column(filename, key, fs=DEFAULT_FIELD_SEP, header=False, item_func=lambda x: x):
-    """
-    returns the key-th column of filename as a list starting from 1 if there is no header,
-    otherwise it returns the column with key in the header
-    If some records have less than key fields and there is no header, None is returned for those fields
-    item_func(field) is applied to every field before returning it
-    """
-    parser = Parser(filename, fs, header, field_pre_filter=lambda field_key, field: field_key == key)
-    for record in parser.parse():
-        try:
-            if header:
-                yield item_func(next(iter(record.values())))
-            else:
-                yield item_func(record[0])
-        except IndexError:
-            # the current line does not have column n
-            yield None
+class Column(object):
+
+    def __init__(self,
+                 filename,
+                 fs=DEFAULT_FIELD_SEP,
+                 header=False,
+                 max_lines=None,
+                 field_func=lambda x: x,
+                 column_func=lambda x: x):
+        """
+        Initialise a Column object.
+        Arguments:
+        filename -- the name of the file to parse
+        Keyword arguments:
+        fs -- a regex that separates the fields
+        header -- if set to True, the parser interprets the first line of the file as a header.
+                  In this case the columns can be indexed as the key specified in the header and the first
+                  element of the column is the header
+        max_lines -- the maximum number of lines to parse
+        field_func -- a function f(field) which is applied to every field. Default: a function that returns the field
+        column_func -- a function f(column) which is applied to every clumn before returning it.
+                       Default: a function that returns the field
+        """
+        self.filename = filename
+        self.fs = fs
+        self.header = header
+        self.max_lines = max_lines
+        self.field_func = field_func
+        self.column_func = column_func
+
+    def __getitem__(self, index):
+        """
+        if index is a slice, it returns a tuple of columns, where each column is the result
+        of the application of `column_func()` on the column. If `header` is True, `index`
+        must be a key in the header, otherwise it can be an integer. In those cases, the result
+        of the application of `column_func()` on the single column is returned. `field_func()`
+        is applied to every field in the column(s).
+        In the case of slicing, indexes start from 0 to make slicing simpler. Please note that this function needs
+        to parse the whole file unless max_lines is specified in the constructor
+        """
+
+        parser = Parser(self.filename,
+                        self.fs,
+                        self.header,
+                        ordered=True,
+                        max_lines=self.max_lines,
+                        field_func=lambda key, field: self.field_func(field))
+
+        if isinstance(index, slice):
+            if self.header:
+                raise SliceWithHeaderException('Cannot use slicing when a header is specified')
+            columns = OrderedDict()
+            for record in parser.parse():
+                for i, field in enumerate(record[index]):
+                    if i not in columns:
+                        columns[i] = []
+                    columns[i].append(field)
+            # post-processing
+            return [self.column_func(tuple(column)) for column in tuple(columns.values())]
+        else:
+            column = []
+            for record in parser.parse():
+                fields = list(record.values()) if self.header else record
+                try:
+                    column.append(fields[index])
+                except IndexError:
+                    column.append(None)
+            return self.column_func(tuple(column))
+
+    def get(self, *keys):
+        """
+        returns a generator of tuples where every element in the tuple is the field of the corresponding
+        column. For example, if passed three keys, every tuple will have three elements.
+        Please note that this function needs to parse the whole file unless max_lines is specified in
+        the constructor
+
+        """
+        parser = Parser(self.filename,
+                        self.fs,
+                        self.header,
+                        ordered=True,
+                        field_pre_filter=lambda field_key, field: field_key in keys)
+        for record in parser.parse():
+            if self.header:
+                record = record.values()
+            yield tuple(record)
