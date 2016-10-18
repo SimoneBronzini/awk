@@ -12,7 +12,7 @@ Help manipulating files organised in recrods and fields, providing helpers such 
 Structure
 ------------
 
-`awk` provides two main classes: `Reader` and `Parser`, plus a function `column`.
+`awk` provides three main classes: `Reader`, `Parser` and `Column`.
 
 ### `Reader` class
 Provides facilities to read the file one record at a time, possibly using the first line as header. If the header is provided then every record is returned as a dictionary having as keys the header fields, otherwise every record is a tuple of fields
