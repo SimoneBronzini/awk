@@ -15,13 +15,13 @@ Structure
 `awk` provides four main classes: `Record`, `Reader`, `Parser` and `Column`.
 
 ### `Reader` class
-Provides facilities to read the file one record at a time, possibly using the first line as header. If the header is provided then every record is returned as a dictionary having as keys the header fields, otherwise every record is a tuple of fields
+Provides facilities to read the file one `Record` at a time, possibly using the first line as header. If the header is provided then fields in the record can be accesses via the keys specified in the header, otherwise standard access is provided (see the [Record class](#reader-class) for the details).
 
 ### `Parser` class
 Provides facilities to manipulate and filter out records and fields before reading them.
 
 ### `Record` class
-Represents an awk record, it allows access to the record's fields by index, starting from 0, or by key. A key can be either of the form '$2', as per the awk standard, or a string specified in the file's header.
+Represents an awk record, it allows access to the record's fields by index, starting from 0, or by key. A key can be either of the form `'$2'`, as per the awk standard, or a string specified in the file's header. See the [Examples section](#examples) for a more detailed explanation of how indexing a record works.
 
 ### `Column` class
 Provides a column-based access to the file. The columns can be specified as a key corresponding to one of the keys in the header or as a number in case there is no header. If no header is specified, this class can be used to extract slices of columns from the file.
