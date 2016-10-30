@@ -15,7 +15,7 @@ Structure
 `awk` provides four main classes: `Record`, `Reader`, `Parser` and `Column`.
 
 ### `Reader` class
-Provides facilities to read the file one `Record` at a time, possibly using the first line as header. If the header is provided then fields in the record can be accesses via the keys specified in the header, otherwise standard access is provided (see the [Record class](#reader-class) for the details).
+Provides facilities to read the file one `Record` at a time, possibly using the first line as header. If the header is provided then fields in the record can be accesses via the keys specified in the header, otherwise standard access is provided (see the [Record class](#record-class) for the details).
 
 ### `Parser` class
 Provides facilities to manipulate and filter out records and fields before reading them.
