@@ -27,10 +27,6 @@ from itertools import zip_longest
 from collections import OrderedDict
 
 
-class SliceWithHeaderException(Exception):
-    pass
-
-
 class FileNotOpenException(Exception):
     pass
 
@@ -39,7 +35,7 @@ class MissingHeaderException(Exception):
     pass
 
 
-class UnboundedColumnException(Exception):
+class FieldNotFoundException(Exception):
     pass
 
 
@@ -54,17 +50,96 @@ def _DEFAULT_FIELD_FILTER(field_key, field):
     return True
 
 
-def _DEFAULT_RECORD_FUNC(NR, NF, record):
+def _DEFAULT_RECORD_FUNC(NR, record):
     return record
 
 
-def _DEFAULT_RECORD_FILTER(NR, NF, record):
+def _DEFAULT_RECORD_FILTER(NR, record):
     return True
+
+
+class Record(object):
+
+    def __init__(self):
+        """Initialises a Record object"""
+        self._field_dict = {}
+        self._field_list = []
+        self._key_list = []
+        self._iterator = None
+
+    def __getitem__(self, key):
+        """Allows access to fields in the following forms:
+        - record[2]  # column indices start from 0
+        - record[4:7:2]  # same as above
+        - record['$4']  # same as record[3]
+        - record['mykey']  # columns are indexed based on header, if present
+        """
+        try:
+            try:
+                return self._field_dict[key]
+            except (KeyError, TypeError):  # nonexisting key or slice, respectively
+                return self._field_list[key]
+        except IndexError:
+            raise FieldNotFoundException('No field {} in record'.format(key))
+
+    def __setitem__(self, key, val):
+        """should never be done manually, better create a new record than modifying an existing one"""
+        self._field_dict[key] = val
+        self._key_list.append(key)
+        self._field_list.append(val)
+
+    def add(self, val):
+        """should never be done manually, better create a new record than modifying an existing one"""
+        self['${}'.format(len(self._field_list) + 1)] = val
+
+    def fields(self):
+        """returns a generator of the record's fields"""
+        yield from self._field_list
+
+    def keys(self):
+        """returns a generator of the record's keys"""
+        yield from self._key_list
+
+    def __iter__(self):
+        """returns an iterator over the record's keys"""
+        self._iterator = iter(self._key_list)
+        return self
+
+    def __next__(self):
+        """returns the next (key, field) pair. If a header was provided, the key corresponds to the header
+        otherwise it is of the form $1, $2, ..., $NF"""
+        try:
+            next_key = next(self._iterator)
+            return next_key, self._field_dict[next_key]
+        except StopIteration:
+            self._iterator = None
+            raise StopIteration
+
+    def __len__(self):
+        return len(self._field_list)
+
+    @property
+    def NF(self):
+        """same as awk's NF variable"""
+        return len(self)
+
+    def __bool__(self):
+        return bool(len(self))
+
+    def __str__(self):
+        return 'Record({})'.format(', '.join(['{}: {}'.format(key, self._field_dict[key]) for key in self._key_list]))
 
 
 class Reader(object):
 
-    def __init__(self, filename, fs=DEFAULT_FIELD_SEP, header=False, ordered=False, max_lines=None):
+    # TODO: add field type
+    def __init__(self,
+                 filename,
+                 fs=DEFAULT_FIELD_SEP,
+                 header=False,
+                 max_lines=None,
+                 field_filter=_DEFAULT_FIELD_FILTER,
+                 record_filter=_DEFAULT_RECORD_FILTER):
         """Initialises a Reader
 
         Arguments:
@@ -75,14 +150,20 @@ class Reader(object):
         header -- if set to True, the reader interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
-        ordered -- if header i True, then the records will be output as `OrderedDict`s instead of normal dictionaries
         max_lines -- the maximum number of lines to read
+        field_filter -- a function f(key, field) which is applied to the field.
+                        If it returns a falsy value, the field is not included in the record.
+                        default: lambda *args: True
+        record_filter -- a function f(NR, field) which is applied to the record.
+                         If it returns a falsy value, the record is not returned.
+                         default: lambda *args: True
         """
         self.filename = filename
         self.header = header
         self.fs = fs
-        self.ordered = ordered
         self.max_lines = max_lines
+        self.field_filter = field_filter
+        self.record_filter = record_filter
         self._compiled_fs = re.compile(fs)
         self._openfile = None
         self._keys = None
@@ -108,7 +189,7 @@ class Reader(object):
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def _get_next(self):
         if self._openfile is None:
             raise FileNotOpenException
 
@@ -116,7 +197,8 @@ class Reader(object):
             raise StopIteration
 
         line = next(self._openfile).rstrip()
-        fields = tuple(self._compiled_fs.split(line))
+        fields = self._compiled_fs.split(line)
+        record = Record()
 
         if self.header:
             if len(fields) > len(self._keys):
@@ -124,14 +206,29 @@ class Reader(object):
             else:
                 zip_func = zip_longest
 
-            if not self.ordered:
-                fields = {k: v for k, v in zip_func(self._keys, fields)}
-            else:
-                fields = OrderedDict((k, v) for k, v in zip_func(self._keys, fields))
+            for key, value in zip_func(self._keys, fields):
+                if self.field_filter(key, value):
+                    record[key] = value
+
+        else:
+            # TODO: do we really want to start from 1 here?
+            for key, value in enumerate(fields, 1):
+                if self.field_filter(key, value):
+                    record.add(value)
 
         self.lines += 1
 
-        return fields
+        if not self.record_filter(self.lines, record):
+            return None
+
+        return record
+
+    def __next__(self):
+        record = self._get_next()
+        while record is None:
+            # skip filtered out lines
+            record = self._get_next()
+        return record
 
 
 class Parser(object):
@@ -140,7 +237,6 @@ class Parser(object):
                  filename,
                  fs=DEFAULT_FIELD_SEP,
                  header=False,
-                 ordered=False,
                  max_lines=None,
                  field_func=_DEFAULT_FIELD_FUNC,
                  record_func=_DEFAULT_RECORD_FUNC,
@@ -158,7 +254,6 @@ class Parser(object):
         header -- if set to True, the parser interprets the first line of the file as a header.
                   In this case every record is returned as a dictionary and every field in the header
                   is used as the key of the corresponding field in the following lines
-        ordered -- if header is True, then the records will be output as `OrderedDict`s instead of normal dictionaries
         max_lines -- the maximum number of lines to parse
         field_func -- a function f(field_key, field) which is applied to every field, field_key is
                       the number of the field if there is no header, the corresponding header key otherwise.
@@ -169,13 +264,13 @@ class Parser(object):
         field_pre_filter -- a function f(field_key, field) which is applied to the field before `field_func`.
                             If it returns a falsy value, the field is not returned.
                             default: lambda *args: True
-        record_pre_filter -- a function f(NR, NF, field) which is applied to the record before `record_func`.
+        record_pre_filter -- a function f(NR, field) which is applied to the record before `record_func`.
                              If it returns a falsy value, the record is not returned
                              default: lambda *args: True
         field_post_filter -- a function f(field_key, field) which is applied to the field after `field_func`.
                              If it returns a falsy value, the field is not returned.
                              default: lambda *args: True
-        record_post_filter -- a function f(NR, NF, field) which is applied to the record after `record_func`.
+        record_post_filter -- a function f(NR, field) which is applied to the record after `record_func`.
                               If it returns a falsy value, the record is not returned
                               default: lambda *args: True
         """
@@ -183,7 +278,6 @@ class Parser(object):
         self.filename = filename
         self.header = header
         self.fs = fs
-        self.ordered = ordered
         self.max_lines = max_lines
         self.field_func = field_func
         self.record_func = record_func
@@ -192,48 +286,32 @@ class Parser(object):
         self.field_post_filter = field_post_filter
         self.record_post_filter = record_post_filter
 
-    def _get_fields(self, record):
+    def _parse_fields(self, record):
+        new_record = Record()
+        for key, field in record:
+            new_field = self.field_func(key, field)
+            if self.field_post_filter(key, new_field):
+                new_record[key] = new_field
+        return new_record
 
-        if self.header:
-            # expect a dict
-            fields = record.items()
-        else:
-            # expect a list
-            fields = enumerate(record, 1)
-
-        result = []
-        for key, val in fields:
-            if self.field_pre_filter(key, val):
-                new_field = self.field_func(key, val)
-                if self.field_post_filter(key, new_field):
-                    result.append((key, new_field))
-
-        if self.header:
-            if self.ordered:
-                # return an OrderedDict
-                return OrderedDict(result)
-            # return a dict
-            return dict(result)
-        # return a list
-        return [val for key, val in result]
-
-    # TODO: add writing capabilities
     def parse(self):
-        """Parse the file provided at initialisation time
-        returns a generator of records, where every record is a dictionary if the file has a header,
-        a list otherwise. The records returned and the fields in them are the result of the application
-        of record_func and field_func respectively.
+        """Parse the file provided at initialisation time returns a generator of `Record`s.
+        The records returned and the fields in them are the result of the application of
+        record_func and field_func respectively.
         Only records respecting the pre and post filters are present, same applies for the fields in each record
         """
-        with Reader(self.filename, self.fs, self.header, self.ordered, self.max_lines) as reader:
-            for nr, record in enumerate(reader, 1):
-                nf = len(record)
-                if not self.record_pre_filter(nr, nf, record):
-                    continue
-                result = self._get_fields(record)
-                new_record = self.record_func(nr, nf, result)
-                if self.record_post_filter(nr, nf, new_record):
-                    yield new_record
+        reader_args = (self.filename,
+                       self.fs,
+                       self.header,
+                       self.max_lines,
+                       self.field_pre_filter,
+                       self.record_pre_filter)
+
+        with Reader(*reader_args) as reader:
+            for nr, record in enumerate(reader, 1):  # line numbers start from 1
+                record = self.record_func(nr, self._parse_fields(record))
+                if self.record_post_filter(nr, record):
+                    yield record
 
 
 class Column(object):
@@ -280,27 +358,25 @@ class Column(object):
         parser = Parser(self.filename,
                         self.fs,
                         self.header,
-                        ordered=True,
                         max_lines=self.max_lines,
                         field_func=lambda key, field: self.field_func(field))
 
         if isinstance(index, slice):
-            if self.header:
-                raise SliceWithHeaderException('Cannot use slicing when a header is specified')
             columns = OrderedDict()
             for record in parser.parse():
-                for i, field in enumerate(record[index]):
-                    if i not in columns:
-                        columns[i] = []
-                    columns[i].append(field)
+                for i, field in enumerate(list(record.fields())[index]):
+                    try:
+                        columns[i].append(field)
+                    except KeyError:
+                        columns[i] = [field]
             # post-processing
-            return [self.column_func(tuple(column)) for column in tuple(columns.values())]
+            return [self.column_func(tuple(column)) for column in columns.values()]
         else:
             column = []
             for record in parser.parse():
-                fields = list(record.values()) if self.header else record
                 try:
-                    column.append(fields[index])
+                    fields = list(record.fields())[index]
+                    column.append(fields)
                 except IndexError:
                     column.append(None)
             return self.column_func(tuple(column))
@@ -316,9 +392,6 @@ class Column(object):
         parser = Parser(self.filename,
                         self.fs,
                         self.header,
-                        ordered=True,
-                        field_pre_filter=lambda field_key, field: field_key in keys)
+                        field_pre_filter=lambda key, field: key in keys)
         for record in parser.parse():
-            if self.header:
-                record = record.values()
-            yield tuple(record)
+            yield tuple(record.fields())

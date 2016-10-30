@@ -12,13 +12,16 @@ Help manipulating files organised in recrods and fields, providing helpers such 
 Structure
 ------------
 
-`awk` provides three main classes: `Reader`, `Parser` and `Column`.
+`awk` provides four main classes: `Record`, `Reader`, `Parser` and `Column`.
 
 ### `Reader` class
 Provides facilities to read the file one record at a time, possibly using the first line as header. If the header is provided then every record is returned as a dictionary having as keys the header fields, otherwise every record is a tuple of fields
 
 ### `Parser` class
 Provides facilities to manipulate and filter out records and fields before reading them.
+
+### `Record` class
+Represents an awk record, it allows access to the record's fields by index, starting from 0, or by key. A key can be either of the form '$2', as per the awk standard, or a string specified in the file's header.
 
 ### `Column` class
 Provides a column-based access to the file. The columns can be specified as a key corresponding to one of the keys in the header or as a number in case there is no header. If no header is specified, this class can be used to extract slices of columns from the file.
@@ -51,7 +54,7 @@ Imagine to have the following file `testinput`:
 	2 3 5 6 6 6 8
 	0 2 1 0 8 3 7
 
-the following code will return every line as a tuple of fields:
+the following code will return every line as a record:
 
 ```python
 from awk import Reader
@@ -62,13 +65,18 @@ with Reader('testinput') as reader:
 
 output:
 
-    ('A', 'B', 'C', 'D', 'E', 'F', 'G')
-    ('2', '8', '0', '0', '5', '7', '7')
-    ('3', '0', '7', '0', '0', '7', '0')
-    ('2', '3', '5', '6', '6', '6', '8')
-    ('0', '2', '1', '0', '8', '3', '7')
+    Record($1: A, $2: B, $3: C, $4: D, $5: E, $6: F, $7: G)
+    Record($1: 2, $2: 8, $3: 0, $4: 0, $5: 5, $6: 7, $7: 7)
+    Record($1: 3, $2: 0, $3: 7, $4: 0, $5: 0, $6: 7, $7: 0)
+    Record($1: 2, $2: 3, $3: 5, $4: 6, $5: 6, $6: 6, $7: 8)
+    Record($1: 0, $2: 2, $3: 1, $4: 0, $5: 8, $6: 3, $7: 7)
+
+the records in the output can be used to loop over their fields or to access their fields in the following fashions:
+- `record[1]` (indices start from 0)
+- `record[1:3:2]` (indices start from 0)
+- `record['$2']` (indices start from `'$1'`)
     
-The following code will parse the same file, parsing the header as keys for the various fields, and return a dictionary:
+The following code will parse the same file, parsing the header as keys for the various fields, and return a record:
 
 ```python
 from awk import Reader
@@ -79,21 +87,17 @@ with Reader('testinput', header=True) as reader:
 
 output:
 
-    {'B': '8', 'F': '7', 'G': '7', 'C': '0', 'E': '5', 'A': '2', 'D': '0'}
-    {'B': '0', 'F': '7', 'G': '0', 'C': '7', 'E': '0', 'A': '3', 'D': '0'}
-    {'B': '3', 'F': '6', 'G': '8', 'C': '5', 'E': '6', 'A': '2', 'D': '6'}
-    {'B': '2', 'F': '3', 'G': '7', 'C': '1', 'E': '8', 'A': '0', 'D': '0'}
+    Record(A: 2, B: 8, C: 0, D: 0, E: 5, F: 7, G: 7)
+    Record(A: 3, B: 0, C: 7, D: 0, E: 0, F: 7, G: 0)
+    Record(A: 2, B: 3, C: 5, D: 6, E: 6, F: 6, G: 8)
+    Record(A: 0, B: 2, C: 1, D: 0, E: 8, F: 3, G: 7)
 
-Notice that the above output returns an unordered dictionary, indexed by the keys specified in the header, if we want the output to be ordered we just have to pass `ordered=True` to the `Reader` constructor and we will get:
-
-    OrderedDict([('A', '2'), ('B', '8'), ('C', '0'), ('D', '0'), ('E', '5'), ('F', '7'), ('G', '7')])
-    OrderedDict([('A', '3'), ('B', '0'), ('C', '7'), ('D', '0'), ('E', '0'), ('F', '7'), ('G', '0')])
-    OrderedDict([('A', '2'), ('B', '3'), ('C', '5'), ('D', '6'), ('E', '6'), ('F', '6'), ('G', '8')])
-    OrderedDict([('A', '0'), ('B', '2'), ('C', '1'), ('D', '0'), ('E', '8'), ('F', '3'), ('G', '7')])
+Notice that despite the file has a header, we can still access the record's fields as specified in the example above,
+but in this case also access by key (i.e. `record['B']`) is supported.
 
 
 #### Parser
-This is the class which most reflects the awk command philosophy, performing computation on a file organised in fields and recoprds.
+This is the class which most reflects the awk command philosophy, performing computation on a file organised in fields and records.
 For instance, we can use the following code to square every value in our file:
 
 ```python
@@ -108,10 +112,10 @@ for record in parser.parse():
 
 output:
 
-    OrderedDict([('A', 4), ('B', 64), ('C', 0), ('D', 0), ('E', 25), ('F', 49), ('G', 49)])
-    OrderedDict([('A', 9), ('B', 0), ('C', 49), ('D', 0), ('E', 0), ('F', 49), ('G', 0)])
-    OrderedDict([('A', 4), ('B', 9), ('C', 25), ('D', 36), ('E', 36), ('F', 36), ('G', 64)])
-    OrderedDict([('A', 0), ('B', 4), ('C', 1), ('D', 0), ('E', 64), ('F', 9), ('G', 49)])
+    Record(A: 4, B: 64, C: 0, D: 0, E: 25, F: 49, G: 49)
+    Record(A: 9, B: 0, C: 49, D: 0, E: 0, F: 49, G: 0)
+    Record(A: 4, B: 9, C: 25, D: 36, E: 36, F: 36, G: 64)
+    Record(A: 0, B: 4, C: 1, D: 0, E: 64, F: 9, G: 49)
 
 We can make every record the sum of its fields:
 
