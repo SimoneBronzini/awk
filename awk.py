@@ -31,10 +31,6 @@ class FileNotOpenException(Exception):
     pass
 
 
-class MissingHeaderException(Exception):
-    pass
-
-
 class FieldNotFoundException(Exception):
     pass
 
