@@ -104,7 +104,6 @@ For instance, we can use the following code to square every value in our file:
 from awk import Parser
 parser = Parser('testinput',
                 header=True,
-                ordered=True,
                 field_func=lambda key, field: int(field)**2)
 for record in parser.parse():
     print(record)
@@ -123,7 +122,6 @@ We can make every record the sum of its fields:
 from awk import Parser
 parser = Parser('testinput',
                 header=True,
-                ordered=True,
                 field_func=lambda key, field: int(field)**2,
                 record_func=lambda nr, nf, record: sum(record.values()))
 for record in parser.parse():
@@ -143,7 +141,6 @@ and filter out all fields whose key is a vowel and all records whose sum is grea
 from awk import Parser
 parser = Parser('testinput',
                 header=True,
-                ordered=True,
                 field_func=lambda key, field: int(field)**2,
                 record_func=lambda nr, nf, record: sum(record.values()),
                 field_pre_filter=lambda key, field: key not in 'AE',
