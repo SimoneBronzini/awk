@@ -189,15 +189,7 @@ class Reader(object):
     def __iter__(self):
         return self
 
-    def _get_next(self):
-        if self._openfile is None:
-            raise FileNotOpenException
-
-        if self.max_lines is not None and self.lines >= self.max_lines:
-            raise StopIteration
-
-        line = next(self._openfile).rstrip()
-        fields = self._compiled_fs.split(line)
+    def _get_record(self, fields):
         record = Record()
 
         if self.header:
@@ -209,12 +201,24 @@ class Reader(object):
             for key, value in zip_func(self._keys, fields):
                 if self.field_filter(key, value):
                     record[key] = value
-
         else:
-            # TODO: do we really want to start from 1 here?
-            for key, value in enumerate(fields, 1):
+            # indexes start from 0
+            for key, value in enumerate(fields):
                 if self.field_filter(key, value):
                     record.add(value)
+        return record
+
+    def _get_next(self):
+        if self._openfile is None:
+            raise FileNotOpenException
+
+        if self.max_lines is not None and self.lines >= self.max_lines:
+            raise StopIteration
+
+        line = next(self._openfile).rstrip()
+        fields = self._compiled_fs.split(line)
+
+        record = self._get_record(fields)
 
         self.lines += 1
 

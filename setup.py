@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='awk',
-      version='1.1.1',
+      version='1.2.1',
       py_modules=['awk'],
       author='Simone Bronzini',
       author_email='simone.bronzini@moveax.it',
