@@ -56,20 +56,24 @@ def _DEFAULT_RECORD_FILTER(NR, record):
 
 class Record(object):
 
-    def __init__(self):
+    def __init__(self, full_line):
         """Initialises a Record object"""
         self._field_dict = {}
         self._field_list = []
         self._key_list = []
         self._iterator = None
+        self._full_line = full_line
 
     def __getitem__(self, key):
         """Allows access to fields in the following forms:
         - record[2]  # column indices start from 0
         - record[4:7:2]  # same as above
-        - record['$4']  # same as record[3]
+        - record['$4']  # same as record[3], record['$0'] returns the original line
         - record['mykey']  # columns are indexed based on header, if present
         """
+        if key == '$0':
+            return self._full_line
+
         try:
             try:
                 return self._field_dict[key]
@@ -98,18 +102,7 @@ class Record(object):
 
     def __iter__(self):
         """returns an iterator over the record's keys"""
-        self._iterator = iter(self._key_list)
-        return self
-
-    def __next__(self):
-        """returns the next (key, field) pair. If a header was provided, the key corresponds to the header
-        otherwise it is of the form $1, $2, ..., $NF"""
-        try:
-            next_key = next(self._iterator)
-            return next_key, self._field_dict[next_key]
-        except StopIteration:
-            self._iterator = None
-            raise StopIteration
+        return ((key, self._field_dict[key]) for key in self._key_list)
 
     def __len__(self):
         return len(self._field_list)
@@ -185,8 +178,11 @@ class Reader(object):
     def __iter__(self):
         return self
 
-    def _get_record(self, fields):
-        record = Record()
+    def _get_record(self, line):
+
+        fields = self._compiled_fs.split(line)
+
+        record = Record(line)
 
         if self.header:
             if len(fields) > len(self._keys):
@@ -198,7 +194,6 @@ class Reader(object):
                 if self.field_filter(key, value):
                     record[key] = value
         else:
-            # indexes start from 0
             for key, value in enumerate(fields):
                 if self.field_filter(key, value):
                     record.add(value)
@@ -212,9 +207,8 @@ class Reader(object):
             raise StopIteration
 
         line = next(self._openfile).rstrip()
-        fields = self._compiled_fs.split(line)
 
-        record = self._get_record(fields)
+        record = self._get_record(line)
 
         self.lines += 1
 
@@ -287,7 +281,7 @@ class Parser(object):
         self.record_post_filter = record_post_filter
 
     def _parse_fields(self, record):
-        new_record = Record()
+        new_record = Record(record['$0'])
         for key, field in record:
             new_field = self.field_func(key, field)
             if self.field_post_filter(key, new_field):
